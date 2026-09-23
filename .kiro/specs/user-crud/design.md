@@ -432,11 +432,18 @@ spring:
     console:
       enabled: true
       path: /h2-console
+  threads:
+    virtual:
+      enabled: true
 ```
 
 La consola H2 queda disponible en `http://localhost:8080/h2-console`.
 
-_Requisitos cubiertos: 7.1, 7.2, 7.3, 7.4, 7.5._
+### Virtual Threads (Java 21 / Project Loom)
+
+La propiedad `spring.threads.virtual.enabled=true` indica a Spring Boot 3.5 que ejecute el manejo de peticiones HTTP (Tomcat) y las tareas asíncronas sobre **virtual threads** en lugar de hilos de plataforma. Esto mejora la escalabilidad en cargas dominadas por I/O (por ejemplo, esperas a la base de datos) sin necesitar pools grandes de hilos de plataforma. No requiere cambios de código: los controladores y servicios existentes se benefician de forma transparente y el comportamiento funcional se mantiene.
+
+_Requisitos cubiertos: 7.1, 7.2, 7.3, 7.4, 7.5, 10.1, 10.2, 10.3, 10.4._
 
 ## API Documentation (Swagger / OpenAPI)
 

@@ -106,3 +106,14 @@ Este documento define los requisitos para un **mantenedor de usuarios** (CRUD) c
 5. THE proyecto SHALL incluir un archivo `docker-compose.yml` que permita levantar la aplicación con un solo comando.
 6. THE proyecto SHALL incluir un `.dockerignore` que excluya artefactos innecesarios del contexto de build (por ejemplo `target`, archivos de IDE).
 7. THE contenedor SHALL ejecutar la aplicación con un usuario no root por buenas prácticas de seguridad.
+
+### Requirement 10: Concurrencia con Virtual Threads
+
+**User Story:** Como desarrollador, quiero que la aplicación procese las peticiones sobre virtual threads de Java 21, para mejorar la escalabilidad ante cargas de I/O sin aumentar el consumo de hilos de plataforma.
+
+#### Acceptance Criteria
+
+1. THE aplicación SHALL habilitar los virtual threads de Java 21 (Project Loom) para el manejo de peticiones HTTP.
+2. THE configuración SHALL activarse mediante la propiedad `spring.threads.virtual.enabled=true` en `application.yml`.
+3. WHEN llega una petición HTTP THEN el servidor (Tomcat) SHALL atenderla sobre un virtual thread en lugar de un hilo de plataforma del pool tradicional.
+4. THE cambio SHALL preservar el comportamiento funcional existente de todos los endpoints (mismos códigos HTTP y respuestas).

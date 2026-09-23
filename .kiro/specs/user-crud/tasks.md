@@ -90,3 +90,8 @@
   - Crear un `docker-compose.yml` con un servicio `app` que mapee `8080:8080`.
   - Verificar que la imagen se construye y el contenedor arranca la API en el puerto 8080.
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
+
+- [x] 16. Habilitar Virtual Threads (Java 21 / Loom)
+  - Añadir `spring.threads.virtual.enabled: true` en `application.yml`.
+  - Verificar que la aplicación arranca y que las peticiones HTTP se atienden sobre virtual threads, preservando el comportamiento de los endpoints.
+  - _Requirements: 10.1, 10.2, 10.3, 10.4_
