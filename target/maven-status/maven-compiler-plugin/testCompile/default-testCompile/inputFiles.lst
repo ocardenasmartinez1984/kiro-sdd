@@ -1,7 +1,0 @@
-/home/octavio/workspaces/kiro-sdd/src/test/java/com/example/usercrud/UserCrudEndToEndTest.java
-/home/octavio/workspaces/kiro-sdd/src/test/java/com/example/usercrud/application/service/UserApplicationServiceTest.java
-/home/octavio/workspaces/kiro-sdd/src/test/java/com/example/usercrud/domain/model/EmailTest.java
-/home/octavio/workspaces/kiro-sdd/src/test/java/com/example/usercrud/domain/model/UserTest.java
-/home/octavio/workspaces/kiro-sdd/src/test/java/com/example/usercrud/infrastructure/adapter/in/web/UserControllerTest.java
-/home/octavio/workspaces/kiro-sdd/src/test/java/com/example/usercrud/infrastructure/adapter/out/persistence/SpringDataUserRepositoryTest.java
-/home/octavio/workspaces/kiro-sdd/src/test/java/com/example/usercrud/infrastructure/adapter/out/persistence/UserPersistenceAdapterTest.java
