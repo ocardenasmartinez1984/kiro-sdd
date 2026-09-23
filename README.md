@@ -24,67 +24,98 @@ API REST para el mantenimiento de usuarios (crear, consultar, actualizar y elimi
 | Base de datos  | H2 (en memoria)                     | Gestionada por Boot  |
 | Boilerplate    | Lombok                              | Gestionada por Boot  |
 | Validación     | Jakarta Bean Validation             | Gestionada por Boot  |
+| Documentación  | springdoc-openapi (Swagger UI)      | 2.8.x                |
+| Contenedores   | Docker + Docker Compose             | multi-etapa          |
 | Build          | Maven                               | 3.9+                 |
 
 ---
 
 ## Arquitectura
 
-Arquitectura en capas con separación clara de responsabilidades:
+Arquitectura **hexagonal (puertos y adaptadores) + DDD**. El dominio queda en el centro, sin dependencias de framework; los adaptadores (web y persistencia) se conectan a través de puertos.
 
 ```
-   Cliente HTTP
-        │  JSON
-        ▼
- ┌───────────────┐      ┌───────────────────────┐
- │ UserController│─────▶│ GlobalExceptionHandler │
- └───────┬───────┘      └───────────────────────┘
-         │ DTO
-         ▼
- ┌───────────────┐
- │  UserService  │   (lógica de negocio, @Transactional)
- └───────┬───────┘
-         │ Entity
-         ▼
- ┌───────────────┐
- │ UserRepository│   (Spring Data JPA)
- └───────┬───────┘
-         │ SQL
-         ▼
-    ┌─────────┐
-    │   H2    │
-    └─────────┘
+        Cliente HTTP
+             │  JSON
+             ▼
+ ┌───────────────────────────┐
+ │  Adaptador de entrada web  │  UserController + DTOs + UserWebMapper
+ └─────────────┬─────────────┘
+               │ invoca
+               ▼
+ ┌───────────────────────────┐
+ │   Puertos de entrada       │  Create/Get/Update/DeleteUserUseCase
+ └─────────────┬─────────────┘
+               │ implementados por
+               ▼
+ ┌───────────────────────────┐        ┌──────────────────────┐
+ │  UserApplicationService    │───────▶│   Dominio (puro)     │
+ │  (@Transactional)          │        │  User, UserId, Email │
+ └─────────────┬─────────────┘        └──────────────────────┘
+               │ usa
+               ▼
+ ┌───────────────────────────┐
+ │  Puerto de salida          │  UserRepositoryPort
+ └─────────────┬─────────────┘
+               │ implementado por
+               ▼
+ ┌───────────────────────────┐
+ │ Adaptador de persistencia  │  UserPersistenceAdapter + UserJpaEntity
+ └─────────────┬─────────────┘
+               │ SQL
+               ▼
+          ┌─────────┐
+          │   H2    │
+          └─────────┘
 ```
+
+Regla de dependencias hacia el centro: el dominio no depende de nada externo; la aplicación depende solo del dominio; la infraestructura depende de aplicación y dominio.
 
 ### Estructura de paquetes
 
 ```
 com.example.usercrud
 ├── UserCrudApplication.java
-├── controller
-│   └── UserController.java
-├── service
-│   └── UserService.java
-├── repository
-│   └── UserRepository.java
-├── entity
-│   └── User.java
-├── dto
-│   ├── UserRequest.java
-│   └── UserResponse.java
-└── exception
-    ├── ResourceNotFoundException.java
-    ├── DuplicateEmailException.java
-    ├── GlobalExceptionHandler.java
-    └── ErrorResponse.java
+├── domain                          # núcleo puro, sin framework
+│   ├── model
+│   │   ├── User.java               (aggregate root)
+│   │   ├── UserId.java             (value object)
+│   │   └── Email.java              (value object, valida formato)
+│   └── exception
+│       ├── InvalidEmailException.java
+│       ├── UserNotFoundException.java
+│       └── DuplicateEmailException.java
+├── application
+│   ├── port
+│   │   ├── in                      # puertos de entrada (use cases)
+│   │   │   ├── CreateUserUseCase.java
+│   │   │   ├── GetUserUseCase.java
+│   │   │   ├── UpdateUserUseCase.java
+│   │   │   ├── DeleteUserUseCase.java
+│   │   │   └── CreateUserCommand.java
+│   │   └── out                     # puerto de salida
+│   │       └── UserRepositoryPort.java
+│   └── service
+│       └── UserApplicationService.java
+└── infrastructure
+    ├── adapter
+    │   ├── in.web                  # UserController, dto, UserWebMapper, GlobalExceptionHandler
+    │   └── out.persistence         # UserJpaEntity, SpringDataUserRepository,
+    │                               # UserPersistenceAdapter, UserPersistenceMapper
+    └── config
+        └── OpenApiConfig.java
 ```
 
 ---
 
 ## Requisitos previos
 
+Para ejecución local:
 - JDK 21 o superior
 - Maven 3.9+
+
+Para ejecución con contenedores:
+- Docker y Docker Compose
 
 ---
 
@@ -99,6 +130,25 @@ mvn spring-boot:run
 ```
 
 La API queda disponible en `http://localhost:8080`.
+
+---
+
+## Ejecutar con Docker
+
+El proyecto incluye un `Dockerfile` multi-etapa (build con Maven + JDK 21, runtime con JRE 21, usuario no root) y un `docker-compose.yml`.
+
+```bash
+# Opción A: Docker Compose (construye y levanta)
+docker compose up --build
+
+# Opción B: build y run manual
+docker build -t user-crud:latest .
+docker run --rm -p 8080:8080 user-crud:latest
+```
+
+La API queda disponible en `http://localhost:8080`. Para detener con Compose: `docker compose down`.
+
+La base de datos H2 es en memoria y vive dentro del contenedor, por lo que los datos se pierden al reiniciarlo (comportamiento esperado para este proyecto de ejemplo).
 
 ### Documentación de la API (Swagger)
 
