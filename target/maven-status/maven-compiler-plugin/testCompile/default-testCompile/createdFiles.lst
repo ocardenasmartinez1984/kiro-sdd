@@ -1,0 +1,7 @@
+com/example/usercrud/domain/model/UserTest.class
+com/example/usercrud/infrastructure/adapter/out/persistence/UserPersistenceAdapterTest.class
+com/example/usercrud/infrastructure/adapter/out/persistence/SpringDataUserRepositoryTest.class
+com/example/usercrud/domain/model/EmailTest.class
+com/example/usercrud/infrastructure/adapter/in/web/UserControllerTest.class
+com/example/usercrud/application/service/UserApplicationServiceTest.class
+com/example/usercrud/UserCrudEndToEndTest.class

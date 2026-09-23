@@ -1,0 +1,32 @@
+# Artefactos de build
+target/
+*.jar
+*.war
+
+# Control de versiones
+.git/
+.gitignore
+
+# Metadatos de Kiro / spec
+.kiro/
+
+# Archivos de IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Documentación / colecciones que no afectan el build
+README.md
+*.postman_collection.json
