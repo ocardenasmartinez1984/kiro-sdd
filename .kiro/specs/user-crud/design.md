@@ -464,6 +464,25 @@ La documentación interactiva se genera con **springdoc-openapi**, que inspeccio
 
 _Requisitos cubiertos: 8.1, 8.2, 8.3, 8.4, 8.5._
 
+## Observability (Spring Boot Actuator)
+
+Se añade `spring-boot-starter-actuator` para exponer endpoints operativos, principalmente de salud. Esto habilita las probes de liveness/readiness que consumirá Kubernetes.
+
+### Endpoints expuestos
+
+| Recurso | Ruta |
+|---------|------|
+| Salud general | `/actuator/health` |
+| Liveness probe | `/actuator/health/liveness` |
+| Readiness probe | `/actuator/health/readiness` |
+
+### Configuración
+
+- Se habilita el grupo de probes con `management.endpoint.health.probes.enabled: true` y se muestran detalles con `management.endpoint.health.show-details: always`.
+- Por defecto solo se expone `health` sobre HTTP (superficie mínima, alineada con KISS); no se abren otros endpoints de gestión salvo necesidad.
+
+_Requisitos cubiertos: 12.1, 12.2, 12.3, 12.4._
+
 ## Containerization (Docker)
 
 La aplicación se empaqueta como una imagen Docker mediante una construcción **multi-etapa** para mantener la imagen final ligera y sin herramientas de build.
@@ -490,6 +509,41 @@ La aplicación se empaqueta como una imagen Docker mediante una construcción **
 - `docker-compose.yml`: define el servicio `app` mapeando `8080:8080`.
 
 _Requisitos cubiertos: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7._
+
+## Kubernetes (minikube)
+
+La aplicación se despliega en un clúster minikube local con manifests mínimos: un `Deployment` y un `Service`. Manteniendo KISS, no se usa Helm ni Ingress (innecesarios para un despliegue local de un solo servicio).
+
+### Manifests
+
+| Archivo | Recurso | Propósito |
+|---------|---------|-----------|
+| `k8s/deployment.yaml` | `Deployment` | Ejecuta 1 réplica del contenedor `user-crud`, puerto 8080, con probes y límites de recursos |
+| `k8s/service.yaml` | `Service` (`NodePort`) | Expone la aplicación dentro del clúster y para acceso local |
+
+### Deployment
+
+- **Imagen**: `user-crud:latest`. Como la imagen se construye localmente (no se publica en un registro), se usa `imagePullPolicy: IfNotPresent` y se carga en minikube con `minikube image load user-crud:latest` (o construyendo con el daemon Docker de minikube).
+- **Probes**:
+  - `livenessProbe` → `GET /actuator/health/liveness`
+  - `readinessProbe` → `GET /actuator/health/readiness`
+- **Recursos**: `requests` de 256Mi/250m y `limits` de 512Mi/500m (valores razonables para una app Spring Boot pequeña).
+
+### Service
+
+- Tipo `NodePort` para permitir el acceso desde la máquina host vía `minikube service user-crud --url`.
+- Mapea el puerto 80 del Service al 8080 del contenedor.
+
+### Flujo de despliegue
+
+```bash
+eval $(minikube docker-env)      # usar el daemon Docker de minikube
+docker build -t user-crud:latest .
+kubectl apply -f k8s/
+minikube service user-crud --url # obtener la URL de acceso
+```
+
+_Requisitos cubiertos: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6._
 
 ## Testing Strategy
 

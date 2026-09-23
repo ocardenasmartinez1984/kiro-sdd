@@ -95,3 +95,9 @@
   - Añadir `spring.threads.virtual.enabled: true` en `application.yml`.
   - Verificar que la aplicación arranca y que las peticiones HTTP se atienden sobre virtual threads, preservando el comportamiento de los endpoints.
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
+
+- [x] 17. Añadir Spring Boot Actuator (observabilidad)
+  - Añadir la dependencia `spring-boot-starter-actuator` al `pom.xml`.
+  - Configurar en `application.yml` la exposición del endpoint `health`, habilitar las probes (`management.endpoint.health.probes.enabled: true`) y `show-details: always`.
+  - Verificar que `/actuator/health`, `/actuator/health/liveness` y `/actuator/health/readiness` responden con estado UP.
+  - _Requirements: 12.1, 12.2, 12.3, 12.4_

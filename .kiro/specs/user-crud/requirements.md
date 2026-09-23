@@ -117,3 +117,27 @@ Este documento define los requisitos para un **mantenedor de usuarios** (CRUD) c
 2. THE configuración SHALL activarse mediante la propiedad `spring.threads.virtual.enabled=true` en `application.yml`.
 3. WHEN llega una petición HTTP THEN el servidor (Tomcat) SHALL atenderla sobre un virtual thread en lugar de un hilo de plataforma del pool tradicional.
 4. THE cambio SHALL preservar el comportamiento funcional existente de todos los endpoints (mismos códigos HTTP y respuestas).
+
+### Requirement 11: Despliegue en Kubernetes (minikube)
+
+**User Story:** Como desarrollador, quiero desplegar la aplicación en un clúster minikube local, para probarla en un entorno Kubernetes sin infraestructura remota.
+
+#### Acceptance Criteria
+
+1. THE proyecto SHALL incluir manifests de Kubernetes (Deployment y Service) para desplegar la aplicación.
+2. THE Deployment SHALL usar la imagen Docker de la aplicación y exponer el contenedor en el puerto 8080.
+3. THE Service SHALL exponer la aplicación dentro del clúster y permitir el acceso local (tipo `NodePort`).
+4. THE Deployment SHALL definir probes de liveness y readiness usando los endpoints de Spring Boot Actuator (`/actuator/health/liveness` y `/actuator/health/readiness`).
+5. THE Deployment SHALL declarar límites y solicitudes de recursos (CPU y memoria) razonables.
+6. WHEN se aplican los manifests en minikube THEN el pod SHALL arrancar y quedar en estado `Ready`, y la API SHALL responder a través del Service.
+
+### Requirement 12: Observabilidad con Spring Boot Actuator
+
+**User Story:** Como operador, quiero endpoints de salud y estado de la aplicación, para monitorearla y para que las probes de Kubernetes puedan comprobar su disponibilidad.
+
+#### Acceptance Criteria
+
+1. THE aplicación SHALL incluir Spring Boot Actuator.
+2. THE aplicación SHALL exponer el endpoint `/actuator/health` con el estado general de la aplicación.
+3. THE aplicación SHALL exponer las probes de liveness (`/actuator/health/liveness`) y readiness (`/actuator/health/readiness`).
+4. WHEN la aplicación está operativa THEN el endpoint de salud SHALL responder con estado HTTP 200 y `status: UP`.
