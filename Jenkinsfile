@@ -1,6 +1,6 @@
 // Pipeline declarativo de CI/CD para user-crud.
-// Etapas: Checkout -> Compile -> Unit Tests -> Dockerize -> Deploy (minikube).
-// Reutiliza el Dockerfile multi-etapa y los manifests de k8s/ existentes.
+// Etapas: Checkout -> Build & Test -> Dockerize -> Deploy (minikube).
+// El JAR se construye una sola vez aquí y el Dockerfile (runtime-only) lo reutiliza.
 pipeline {
     agent any
 
@@ -16,6 +16,11 @@ pipeline {
         IMAGE_NAME = 'user-crud'
         IMAGE_TAG  = 'latest'
         K8S_DEPLOYMENT = 'user-crud'
+        // Repositorio local de Maven persistente entre builds (evita re-descargar
+        // dependencias). jenkins_home suele ser un volumen persistente.
+        MAVEN_LOCAL_REPO = '/var/jenkins_home/.m2/repository'
+        // Flags de rendimiento: sin transfer progress (-ntp) y build paralelo (-T 1C).
+        MVN_ARGS = "-B -ntp -T 1C -Dmaven.repo.local=${MAVEN_LOCAL_REPO}"
     }
 
     stages {
@@ -37,16 +42,11 @@ pipeline {
             }
         }
 
-        stage('Compile') {
+        stage('Build & Test') {
             steps {
+                // Un solo ciclo Maven compila, prueba y empaqueta el JAR ejecutable.
                 sh 'chmod +x mvnw'
-                sh './mvnw -B clean compile'
-            }
-        }
-
-        stage('Unit Tests') {
-            steps {
-                sh './mvnw -B test'
+                sh './mvnw ${MVN_ARGS} clean package'
             }
             post {
                 always {
@@ -58,9 +58,9 @@ pipeline {
 
         stage('Dockerize') {
             steps {
-                // Construir contra el daemon Docker de minikube para que la imagen
-                // quede disponible en el clúster sin publicarla en un registro.
-                // El Deployment usa imagePullPolicy: IfNotPresent.
+                // El Dockerfile es runtime-only: solo copia el JAR ya construido arriba.
+                // Se construye contra el daemon Docker de minikube para que la imagen
+                // quede disponible en el clúster (Deployment usa imagePullPolicy: IfNotPresent).
                 sh '''
                     eval $(minikube docker-env)
                     docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .

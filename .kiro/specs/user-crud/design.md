@@ -485,12 +485,17 @@ _Requisitos cubiertos: 12.1, 12.2, 12.3, 12.4._
 
 ## Containerization (Docker)
 
-La aplicación se empaqueta como una imagen Docker mediante una construcción **multi-etapa** para mantener la imagen final ligera y sin herramientas de build.
+La aplicación se empaqueta como una imagen Docker **runtime-only**: el JAR ejecutable se construye una sola vez (por el pipeline de CI con `mvn package`, o localmente) y la imagen únicamente lo copia sobre una base JRE ligera. Esto evita recompilar y re-descargar dependencias dentro de `docker build`, acelerando el pipeline (el JAR se reutiliza en lugar de reconstruirse).
 
 ### Estrategia de imagen
 
-- **Etapa 1 (build)**: imagen con Maven + JDK 21 (`maven:3.9-eclipse-temurin-21`). Copia el `pom.xml`, descarga dependencias (aprovechando la caché de capas) y compila el JAR ejecutable con `mvn clean package -DskipTests`.
-- **Etapa 2 (runtime)**: imagen ligera con JRE 21 (`eclipse-temurin:21-jre`). Copia únicamente el JAR de la etapa de build, crea un usuario no root y define el `ENTRYPOINT`.
+- **Base runtime**: imagen ligera con JRE 21 (`eclipse-temurin:21-jre`).
+- **Artefacto**: copia el JAR ya construido desde `target/user-crud-*.jar`, crea un usuario no root (`appuser`) y define el `ENTRYPOINT`.
+- **Requisito previo**: debe existir `target/user-crud-*.jar` antes de `docker build`. El pipeline garantiza esto ejecutando la etapa `Build & Test` (`mvn clean package`) antes de `Dockerize`.
+
+### Tradeoff (multi-etapa vs runtime-only)
+
+Se abandonó el `Dockerfile` multi-etapa (build con Maven dentro del contenedor) en favor de un Dockerfile runtime-only por rendimiento: el multi-etapa recompilaba y volvía a descargar todas las dependencias en cada `docker build`, duplicando el trabajo que el pipeline ya hace. El coste es que el Dockerfile deja de ser autónomo (`docker build` requiere el JAR previo) y que `docker compose up --build` por sí solo ya no compila el proyecto; hay que ejecutar `mvn package` antes. Para el flujo de este proyecto (CI que siempre compila antes de contenerizar) el tradeoff es favorable y se alinea con KISS.
 
 ### Consideraciones
 
@@ -498,17 +503,17 @@ La aplicación se empaqueta como una imagen Docker mediante una construcción **
 |---------|----------|
 | Puerto | Expone `8081` (`EXPOSE 8081`) |
 | Usuario | Ejecuta como usuario no root (`appuser`) por seguridad |
-| Contexto de build | Un `.dockerignore` excluye `target/`, `.git`, `.kiro`, archivos de IDE |
-| Orquestación local | `docker-compose.yml` levanta el servicio con `docker compose up` |
+| Contexto de build | Un `.dockerignore` excluye `target/` (salvo el JAR ejecutable), `.git`, `.kiro`, archivos de IDE |
+| Orquestación local | `docker-compose.yml` levanta el servicio; requiere el JAR construido previamente |
 | Base de datos | H2 en memoria dentro del propio contenedor (sin servicio externo) |
 
 ### Archivos
 
-- `Dockerfile`: build multi-etapa.
-- `.dockerignore`: exclusiones del contexto.
+- `Dockerfile`: imagen runtime-only (copia el JAR de `target/`).
+- `.dockerignore`: excluye `target/` salvo `target/user-crud-*.jar`.
 - `docker-compose.yml`: define el servicio `app` mapeando `8081:8081`.
 
-_Requisitos cubiertos: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7._
+_Requisitos cubiertos: 9.1, 9.3, 9.4, 9.5, 9.6, 9.7. (9.2 revisado: ver Requirement 9.)_
 
 ## Kubernetes (minikube)
 
@@ -547,40 +552,41 @@ _Requisitos cubiertos: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6._
 
 ## CI/CD (Jenkins)
 
-El ciclo de integración y despliegue se automatiza con un **pipeline declarativo de Jenkins** definido en un `Jenkinsfile` en la raíz del repositorio. El pipeline reutiliza los artefactos ya existentes (el `Dockerfile` multi-etapa y los manifests de `k8s/`), sin duplicar lógica de build ni de despliegue. Manteniendo KISS, es un pipeline lineal de etapas encadenadas, sin plugins ni infraestructura adicionales más allá de los que ya requiere el proyecto (Maven, Docker, kubectl y minikube disponibles en el agente).
+El ciclo de integración y despliegue se automatiza con un **pipeline declarativo de Jenkins** definido en un `Jenkinsfile` en la raíz del repositorio. El código fuente se obtiene desde GitHub y la compilación usa el **Maven Wrapper** (`./mvnw`), de modo que el agente no necesita Maven instalado. El pipeline reutiliza el `Dockerfile` (runtime-only) y los manifests de `k8s/`, sin duplicar lógica de build ni de despliegue. Manteniendo KISS, es un pipeline lineal de etapas encadenadas, sin plugins adicionales más allá de los que ya requiere el proyecto (Docker, kubectl y minikube disponibles en el agente).
 
 ### Etapas del pipeline
 
 | Etapa | Acción | Comando de referencia |
 |-------|--------|-----------------------|
-| Compile | Compila el proyecto | `mvn -B clean compile` |
-| Unit tests | Ejecuta las pruebas unitarias y publica resultados | `mvn -B test` + `junit '**/target/surefire-reports/*.xml'` |
-| Dockerize | Construye la imagen usando el `Dockerfile` existente | `docker build -t user-crud:latest .` |
+| Checkout | Clona el repo de GitHub en la rama `main` (limpiando el workspace) | `checkout GitSCM (WipeWorkspace)` |
+| Build & Test | Compila, prueba y empaqueta el JAR en un solo ciclo; publica resultados | `./mvnw -B -ntp -T 1C -Dmaven.repo.local=... clean package` + `junit '**/target/surefire-reports/*.xml'` |
+| Dockerize | Construye la imagen runtime-only reutilizando el JAR de `target/` | `docker build -t user-crud:latest .` |
 | Deploy (minikube) | Aplica los manifests y verifica el rollout | `kubectl apply -f k8s/` + `kubectl rollout status deployment/user-crud` |
 
 ### Consideraciones de diseño
 
-- **Fallo temprano**: si la etapa de pruebas unitarias falla, el pipeline se detiene y no construye la imagen ni despliega. Esto se logra encadenando las etapas de forma secuencial; una etapa fallida aborta el resto.
-- **Imagen disponible para minikube**: como la imagen se construye localmente (no se publica en un registro) y el `Deployment` usa `imagePullPolicy: IfNotPresent`, la etapa de dockerización debe construir contra el daemon Docker de minikube (`eval $(minikube docker-env)`) o cargar la imagen (`minikube image load user-crud:latest`) antes de desplegar. Se prefiere el daemon de minikube para evitar una copia extra.
-- **Verificación del despliegue**: tras `kubectl apply`, se usa `kubectl rollout status deployment/user-crud` para confirmar que el pod queda `Ready`, alineado con las probes de Actuator ya definidas (Requisito 11/12).
-- **Publicación de resultados de test**: se publican los informes de Surefire con el paso `junit` para dar visibilidad de las pruebas en la UI de Jenkins.
-- **Agente**: se asume un agente Jenkins con acceso a Maven, Docker y `kubectl` apuntando al contexto de minikube. No se introducen agentes ni contenedores de build adicionales para mantener la simplicidad.
+- **Fallo temprano**: si `Build & Test` falla (compilación o pruebas), el pipeline se detiene y no construye la imagen ni despliega. Se logra encadenando las etapas de forma secuencial.
+- **Rendimiento de la compilación**: (1) el repositorio local de Maven se persiste entre builds vía `-Dmaven.repo.local=/var/jenkins_home/.m2/repository`, evitando re-descargar dependencias; (2) se usa `-ntp` (sin transfer progress) y `-T 1C` (build paralelo por núcleos); (3) `Compile` y `Unit Tests` se fusionan en un único `mvn clean package` para no compilar dos veces; (4) la imagen es runtime-only y reutiliza el JAR ya construido en vez de recompilar dentro de `docker build`.
+- **Maven Wrapper**: el pipeline invoca `./mvnw`; los archivos del wrapper (`mvnw`, `.mvn/wrapper/maven-wrapper.properties`) se versionan para que el agente no requiera Maven instalado.
+- **Imagen disponible para minikube**: como la imagen se construye localmente (no se publica en un registro) y el `Deployment` usa `imagePullPolicy: IfNotPresent`, `Dockerize` construye contra el daemon Docker de minikube (`eval $(minikube docker-env)`). Alternativa: `minikube image load user-crud:latest`.
+- **Verificación del despliegue**: tras `kubectl apply`, se usa `kubectl rollout status deployment/user-crud` para confirmar que el pod queda `Ready`, alineado con las probes de Actuator (Requisito 11/12).
+- **Agente**: se asume un agente Jenkins con Docker y `kubectl` apuntando al contexto de minikube. Maven no es necesario gracias al wrapper.
 
 ### Archivo
 
-- `Jenkinsfile`: pipeline declarativo con las etapas `Compile`, `Unit Tests`, `Dockerize` y `Deploy`.
+- `Jenkinsfile`: pipeline declarativo con las etapas `Checkout`, `Build & Test`, `Dockerize` y `Deploy`.
 
 ### Flujo del pipeline
 
 ```mermaid
 graph LR
-    Compile[Compile<br/>mvn clean compile] --> Test[Unit Tests<br/>mvn test]
-    Test -->|éxito| Docker[Dockerize<br/>docker build]
-    Test -->|fallo| Fail[Pipeline fallido]
+    Checkout[Checkout<br/>git main] --> Build[Build & Test<br/>mvnw clean package]
+    Build -->|éxito| Docker[Dockerize<br/>docker build runtime-only]
+    Build -->|fallo| Fail[Pipeline fallido]
     Docker --> Deploy[Deploy minikube<br/>kubectl apply + rollout status]
 ```
 
-_Requisitos cubiertos: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8._
+_Requisitos cubiertos: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9._
 
 ## Testing Strategy
 

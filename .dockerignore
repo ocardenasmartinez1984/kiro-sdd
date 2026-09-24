@@ -1,6 +1,8 @@
-# Artefactos de build
-target/
-*.jar
+# Artefactos de build.
+# El Dockerfile es runtime-only y necesita el JAR ejecutable de target/,
+# así que se excluye todo target/ salvo ese artefacto.
+target/*
+!target/user-crud-*.jar
 *.war
 
 # Control de versiones

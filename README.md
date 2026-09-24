@@ -25,7 +25,7 @@ API REST para el mantenimiento de usuarios (crear, consultar, actualizar y elimi
 | Boilerplate    | Lombok                              | Gestionada por Boot  |
 | Validación     | Jakarta Bean Validation             | Gestionada por Boot  |
 | Documentación  | springdoc-openapi (Swagger UI)      | 2.8.x                |
-| Contenedores   | Docker + Docker Compose             | multi-etapa          |
+| Contenedores   | Docker + Docker Compose             | imagen runtime-only  |
 | Build          | Maven                               | 3.9+                 |
 | Orquestación   | Kubernetes (minikube)               | manifests mínimos    |
 | CI/CD          | Jenkins (pipeline declarativo)      | Jenkinsfile          |
@@ -137,10 +137,13 @@ La API queda disponible en `http://localhost:8081`.
 
 ## Ejecutar con Docker
 
-El proyecto incluye un `Dockerfile` multi-etapa (build con Maven + JDK 21, runtime con JRE 21, usuario no root) y un `docker-compose.yml`.
+El proyecto incluye un `Dockerfile` **runtime-only** (base JRE 21, usuario no root) que copia el JAR ya construido, y un `docker-compose.yml`. Como la imagen no compila por dentro, primero hay que empaquetar el JAR.
 
 ```bash
-# Opción A: Docker Compose (construye y levanta)
+# 1. Construir el JAR (necesario antes de construir la imagen)
+./mvnw -B clean package
+
+# Opción A: Docker Compose (construye la imagen y levanta)
 docker compose up --build
 
 # Opción B: build y run manual
@@ -202,14 +205,20 @@ El repositorio incluye un `Jenkinsfile` (pipeline declarativo) que automatiza el
 
 | Etapa            | Acción                                                            |
 |------------------|-------------------------------------------------------------------|
-| Compile          | `mvn -B clean compile`                                            |
-| Unit Tests       | `mvn -B test` y publica los informes de Surefire (`junit`)        |
-| Dockerize        | Construye la imagen contra el daemon Docker de minikube           |
-| Deploy (minikube)| `kubectl apply -f k8s/` + `kubectl rollout status`                |
+| Checkout         | Clona el repo de GitHub (rama `main`) limpiando el workspace       |
+| Build & Test     | `./mvnw clean package` (compila, prueba y empaqueta) + Surefire     |
+| Dockerize        | Construye la imagen runtime-only contra el daemon Docker de minikube|
+| Deploy (minikube)| `kubectl apply -f k8s/` + `kubectl rollout status`                  |
 
 Si las pruebas unitarias fallan, el pipeline se detiene y no continúa con la contenerización ni el despliegue.
 
-**Requisitos del agente Jenkins:** Maven, Docker, `kubectl` y `minikube` disponibles, con `kubectl` apuntando al contexto de minikube.
+**Optimizaciones de velocidad:**
+- Repositorio local de Maven persistente entre builds (`-Dmaven.repo.local=/var/jenkins_home/.m2/repository`): no re-descarga dependencias.
+- `-ntp` (sin transfer progress) y `-T 1C` (build paralelo por núcleos).
+- `Compile` + `Unit Tests` fusionados en un solo `mvn clean package` (no compila dos veces).
+- Imagen Docker runtime-only: reutiliza el JAR ya construido en vez de recompilar dentro de `docker build`.
+
+**Requisitos del agente Jenkins:** Docker, `kubectl` y `minikube` disponibles, con `kubectl` apuntando al contexto de minikube. Maven no es necesario: el pipeline usa el Maven Wrapper (`./mvnw`).
 
 
 ## Modelo de datos

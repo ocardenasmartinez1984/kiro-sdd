@@ -100,7 +100,7 @@ Este documento define los requisitos para un **mantenedor de usuarios** (CRUD) c
 #### Acceptance Criteria
 
 1. THE proyecto SHALL incluir un `Dockerfile` que construya una imagen ejecutable de la aplicación.
-2. THE `Dockerfile` SHALL usar una construcción multi-etapa (build con Maven + JDK 21, runtime con JRE/JDK 21) para minimizar el tamaño de la imagen final.
+2. THE `Dockerfile` SHALL ser una imagen runtime-only (base JRE 21) que copie el JAR ejecutable previamente construido por el pipeline (`mvn package`), en lugar de compilar dentro del contenedor, para acelerar la contenerización y mantener ligera la imagen final. (Revisado: antes exigía multi-etapa; se cambió por rendimiento, ya que el pipeline siempre compila antes de contenerizar.)
 3. WHEN se construye la imagen THEN el sistema SHALL empaquetar el JAR ejecutable generado por Spring Boot.
 4. WHEN se ejecuta el contenedor THEN el sistema SHALL exponer la API en el puerto 8081.
 5. THE proyecto SHALL incluir un archivo `docker-compose.yml` que permita levantar la aplicación con un solo comando.
