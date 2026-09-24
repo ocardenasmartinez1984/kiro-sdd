@@ -21,13 +21,25 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Clona el repositorio público de GitHub en la rama indicada.
-                git branch: "${GIT_BRANCH}", url: "${GIT_REPO}"
+                // Limpia el workspace y fuerza el checkout del tip real de la rama,
+                // evitando quedarse en una revisión cacheada/antigua.
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "*/${GIT_BRANCH}"]],
+                    userRemoteConfigs: [[url: "${GIT_REPO}"]],
+                    extensions: [
+                        [$class: 'WipeWorkspace'],
+                        [$class: 'CloneOption', noTags: false, honorRefspec: true, shallow: false]
+                    ]
+                ])
+                // Diagnóstico: mostrar la revisión efectivamente comprobada.
+                sh 'git rev-parse HEAD && git log -1 --oneline'
             }
         }
 
         stage('Compile') {
             steps {
+                sh 'chmod +x mvnw'
                 sh './mvnw -B clean compile'
             }
         }
