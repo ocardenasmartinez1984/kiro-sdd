@@ -7,7 +7,7 @@
   - _Requirements: 7.1, 7.2, 7.3_
 
 - [x] 2. Configurar la aplicación y la base de datos H2
-  - Crear `src/main/resources/application.yml` con puerto 8080, datasource H2 en memoria, JPA (`ddl-auto: update`, `show-sql`) y consola H2 habilitada en `/h2-console`.
+  - Crear `src/main/resources/application.yml` con puerto 8081, datasource H2 en memoria, JPA (`ddl-auto: update`, `show-sql`) y consola H2 habilitada en `/h2-console`.
   - Verificar que la aplicación arranca correctamente.
   - _Requirements: 7.3, 7.4, 7.5_
 
@@ -84,11 +84,11 @@
   - Migrar y actualizar todas las pruebas a la nueva estructura: pruebas de dominio (value objects y aggregate como POJO), pruebas del `UserApplicationService` con mock de `UserRepositoryPort`, pruebas del adaptador web (`@WebMvcTest` con use cases mockeados), pruebas del adaptador de persistencia (`@DataJpaTest`) y la prueba end-to-end (`@SpringBootTest`). Ejecutar `mvn test` y confirmar que la build y todas las pruebas pasan.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 7.1, 7.2, 7.3, 7.4, 7.5, 8.1, 8.2, 8.3, 8.4, 8.5_
 
-- [ ] 15. Contenerizar la aplicación con Docker
-  - Crear un `Dockerfile` multi-etapa (build con Maven + JDK 21, runtime con JRE 21) que empaquete el JAR ejecutable y ejecute como usuario no root, exponiendo el puerto 8080.
+- [x] 15. Contenerizar la aplicación con Docker
+  - Crear un `Dockerfile` multi-etapa (build con Maven + JDK 21, runtime con JRE 21) que empaquete el JAR ejecutable y ejecute como usuario no root, exponiendo el puerto 8081.
   - Crear un `.dockerignore` que excluya `target/`, `.git`, `.kiro` y archivos de IDE.
-  - Crear un `docker-compose.yml` con un servicio `app` que mapee `8080:8080`.
-  - Verificar que la imagen se construye y el contenedor arranca la API en el puerto 8080.
+  - Crear un `docker-compose.yml` con un servicio `app` que mapee `8081:8081`.
+  - Verificar que la imagen se construye y el contenedor arranca la API en el puerto 8081.
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7_
 
 - [x] 16. Habilitar Virtual Threads (Java 21 / Loom)
@@ -101,3 +101,7 @@
   - Configurar en `application.yml` la exposición del endpoint `health`, habilitar las probes (`management.endpoint.health.probes.enabled: true`) y `show-details: always`.
   - Verificar que `/actuator/health`, `/actuator/health/liveness` y `/actuator/health/readiness` responden con estado UP.
   - _Requirements: 12.1, 12.2, 12.3, 12.4_
+- [x] 18. Crear el pipeline de CI/CD con Jenkins
+  - Crear un `Jenkinsfile` (pipeline declarativo) en la raíz con las etapas `Compile` (`mvn clean compile`), `Unit Tests` (`mvn test` + publicación de informes Surefire con `junit`), `Dockerize` (construir la imagen contra el daemon Docker de minikube reutilizando el `Dockerfile`) y `Deploy` (`kubectl apply -f k8s/` + `kubectl rollout status`).
+  - Asegurar que un fallo en las pruebas detiene el pipeline antes de contenerizar/desplegar.
+  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8_

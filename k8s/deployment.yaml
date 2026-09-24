@@ -19,19 +19,23 @@ spec:
           image: user-crud:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8080
+            - containerPort: 8081
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            periodSeconds: 10
+            failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: 8080
-            initialDelaySeconds: 30
+              port: 8081
             periodSeconds: 10
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: 8080
-            initialDelaySeconds: 20
+              port: 8081
             periodSeconds: 10
             failureThreshold: 3
           resources:

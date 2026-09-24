@@ -79,7 +79,7 @@ Este documento define los requisitos para un **mantenedor de usuarios** (CRUD) c
 2. THE aplicación SHALL usar Lombok para reducir el código repetitivo (getters, setters, constructores).
 3. THE aplicación SHALL usar una base de datos H2 en memoria para el entorno de desarrollo.
 4. THE consola web de H2 SHALL estar habilitada en el entorno de desarrollo para inspección de datos.
-5. WHEN la aplicación arranca THEN el sistema SHALL exponer la API REST en el puerto configurado (por defecto 8080).
+5. WHEN la aplicación arranca THEN el sistema SHALL exponer la API REST en el puerto configurado (por defecto 8081).
 
 ### Requirement 8: Documentación interactiva de la API (Swagger/OpenAPI)
 
@@ -102,7 +102,7 @@ Este documento define los requisitos para un **mantenedor de usuarios** (CRUD) c
 1. THE proyecto SHALL incluir un `Dockerfile` que construya una imagen ejecutable de la aplicación.
 2. THE `Dockerfile` SHALL usar una construcción multi-etapa (build con Maven + JDK 21, runtime con JRE/JDK 21) para minimizar el tamaño de la imagen final.
 3. WHEN se construye la imagen THEN el sistema SHALL empaquetar el JAR ejecutable generado por Spring Boot.
-4. WHEN se ejecuta el contenedor THEN el sistema SHALL exponer la API en el puerto 8080.
+4. WHEN se ejecuta el contenedor THEN el sistema SHALL exponer la API en el puerto 8081.
 5. THE proyecto SHALL incluir un archivo `docker-compose.yml` que permita levantar la aplicación con un solo comando.
 6. THE proyecto SHALL incluir un `.dockerignore` que excluya artefactos innecesarios del contexto de build (por ejemplo `target`, archivos de IDE).
 7. THE contenedor SHALL ejecutar la aplicación con un usuario no root por buenas prácticas de seguridad.
@@ -125,7 +125,7 @@ Este documento define los requisitos para un **mantenedor de usuarios** (CRUD) c
 #### Acceptance Criteria
 
 1. THE proyecto SHALL incluir manifests de Kubernetes (Deployment y Service) para desplegar la aplicación.
-2. THE Deployment SHALL usar la imagen Docker de la aplicación y exponer el contenedor en el puerto 8080.
+2. THE Deployment SHALL usar la imagen Docker de la aplicación y exponer el contenedor en el puerto 8081.
 3. THE Service SHALL exponer la aplicación dentro del clúster y permitir el acceso local (tipo `NodePort`).
 4. THE Deployment SHALL definir probes de liveness y readiness usando los endpoints de Spring Boot Actuator (`/actuator/health/liveness` y `/actuator/health/readiness`).
 5. THE Deployment SHALL declarar límites y solicitudes de recursos (CPU y memoria) razonables.
@@ -141,3 +141,18 @@ Este documento define los requisitos para un **mantenedor de usuarios** (CRUD) c
 2. THE aplicación SHALL exponer el endpoint `/actuator/health` con el estado general de la aplicación.
 3. THE aplicación SHALL exponer las probes de liveness (`/actuator/health/liveness`) y readiness (`/actuator/health/readiness`).
 4. WHEN la aplicación está operativa THEN el endpoint de salud SHALL responder con estado HTTP 200 y `status: UP`.
+### Requirement 13: Pipeline de CI/CD con Jenkins
+
+**User Story:** Como desarrollador, quiero un pipeline de Jenkins que compile, pruebe, contenerice y despliegue la aplicación en minikube, para automatizar el ciclo de integración y despliegue de forma reproducible.
+
+#### Acceptance Criteria
+
+1. THE proyecto SHALL incluir un `Jenkinsfile` (pipeline declarativo) en la raíz del repositorio.
+2. THE pipeline SHALL incluir una etapa de checkout que clone el código fuente desde el repositorio de GitHub (`https://github.com/ocardenasmartinez1984/kiro-sdd.git`, rama `main`).
+3. THE pipeline SHALL incluir una etapa de compilación que construya el proyecto con Maven (por ejemplo `mvn -B clean compile`).
+4. THE pipeline SHALL incluir una etapa que ejecute las pruebas unitarias (por ejemplo `mvn -B test`) y SHALL publicar los resultados de las pruebas.
+5. WHEN las pruebas unitarias fallan THEN el pipeline SHALL marcar la ejecución como fallida y no continuar con las etapas de contenerización y despliegue.
+6. THE pipeline SHALL incluir una etapa de contenerización que construya la imagen Docker de la aplicación reutilizando el `Dockerfile` existente.
+7. THE pipeline SHALL incluir una etapa de despliegue que aplique los manifests de Kubernetes (`kubectl apply -f k8s/`) sobre el clúster minikube.
+8. THE etapa de despliegue SHALL asegurar que la imagen construida esté disponible para minikube (por ejemplo, construyendo con el daemon Docker de minikube o cargando la imagen con `minikube image load`).
+9. WHEN el despliegue se completa THEN el pipeline SHALL verificar que el rollout del Deployment finalice correctamente (por ejemplo `kubectl rollout status`).

@@ -27,6 +27,8 @@ API REST para el mantenimiento de usuarios (crear, consultar, actualizar y elimi
 | Documentación  | springdoc-openapi (Swagger UI)      | 2.8.x                |
 | Contenedores   | Docker + Docker Compose             | multi-etapa          |
 | Build          | Maven                               | 3.9+                 |
+| Orquestación   | Kubernetes (minikube)               | manifests mínimos    |
+| CI/CD          | Jenkins (pipeline declarativo)      | Jenkinsfile          |
 
 ---
 
@@ -129,7 +131,7 @@ mvn clean compile
 mvn spring-boot:run
 ```
 
-La API queda disponible en `http://localhost:8080`.
+La API queda disponible en `http://localhost:8081`.
 
 ---
 
@@ -143,10 +145,10 @@ docker compose up --build
 
 # Opción B: build y run manual
 docker build -t user-crud:latest .
-docker run --rm -p 8080:8080 user-crud:latest
+docker run --rm -p 8081:8081 user-crud:latest
 ```
 
-La API queda disponible en `http://localhost:8080`. Para detener con Compose: `docker compose down`.
+La API queda disponible en `http://localhost:8081`. Para detener con Compose: `docker compose down`.
 
 La base de datos H2 es en memoria y vive dentro del contenedor, por lo que los datos se pierden al reiniciarlo (comportamiento esperado para este proyecto de ejemplo).
 
@@ -156,12 +158,12 @@ Con la aplicación en marcha:
 
 | Recurso            | URL                                          |
 |--------------------|----------------------------------------------|
-| Swagger UI         | `http://localhost:8080/swagger-ui.html`      |
-| OpenAPI 3 (JSON)   | `http://localhost:8080/v3/api-docs`          |
+| Swagger UI         | `http://localhost:8081/swagger-ui.html`      |
+| OpenAPI 3 (JSON)   | `http://localhost:8081/v3/api-docs`          |
 
 ### Consola H2
 
-Con la aplicación en marcha, abre `http://localhost:8080/h2-console` y conéctate con:
+Con la aplicación en marcha, abre `http://localhost:8081/h2-console` y conéctate con:
 
 | Campo    | Valor                              |
 |----------|------------------------------------|
@@ -170,6 +172,45 @@ Con la aplicación en marcha, abre `http://localhost:8080/h2-console` y conécta
 | Password | _(vacío)_                          |
 
 ---
+
+## Desplegar en Kubernetes (minikube)
+
+El proyecto incluye manifests mínimos en `k8s/` (`deployment.yaml` y `service.yaml`) para desplegar en un clúster **minikube** local.
+
+```bash
+# 1. Construir la imagen dentro del daemon Docker de minikube
+eval $(minikube docker-env)
+docker build -t user-crud:latest .
+
+# 2. Aplicar los manifests
+kubectl apply -f k8s/
+
+# 3. Esperar a que el rollout termine
+kubectl rollout status deployment/user-crud
+
+# 4. Obtener la URL de acceso
+minikube service user-crud --url
+```
+
+El `Deployment` usa `imagePullPolicy: IfNotPresent` (no requiere registro) y define probes de liveness/readiness contra los endpoints de Actuator. El `Service` es de tipo `NodePort`.
+
+---
+
+## CI/CD con Jenkins
+
+El repositorio incluye un `Jenkinsfile` (pipeline declarativo) que automatiza el ciclo completo. Reutiliza el `Dockerfile` y los manifests de `k8s/` existentes.
+
+| Etapa            | Acción                                                            |
+|------------------|-------------------------------------------------------------------|
+| Compile          | `mvn -B clean compile`                                            |
+| Unit Tests       | `mvn -B test` y publica los informes de Surefire (`junit`)        |
+| Dockerize        | Construye la imagen contra el daemon Docker de minikube           |
+| Deploy (minikube)| `kubectl apply -f k8s/` + `kubectl rollout status`                |
+
+Si las pruebas unitarias fallan, el pipeline se detiene y no continúa con la contenerización ni el despliegue.
+
+**Requisitos del agente Jenkins:** Maven, Docker, `kubectl` y `minikube` disponibles, con `kubectl` apuntando al contexto de minikube.
+
 
 ## Modelo de datos
 
@@ -199,7 +240,7 @@ Base path: `/api/users`
 **Crear usuario**
 
 ```bash
-curl -X POST http://localhost:8080/api/users \
+curl -X POST http://localhost:8081/api/users \
   -H "Content-Type: application/json" \
   -d '{"nombre":"Ada Lovelace","email":"ada@example.com","activo":true}'
 ```
@@ -218,19 +259,19 @@ Respuesta `201 Created`:
 **Listar usuarios**
 
 ```bash
-curl http://localhost:8080/api/users
+curl http://localhost:8081/api/users
 ```
 
 **Obtener por id**
 
 ```bash
-curl http://localhost:8080/api/users/1
+curl http://localhost:8081/api/users/1
 ```
 
 **Actualizar**
 
 ```bash
-curl -X PUT http://localhost:8080/api/users/1 \
+curl -X PUT http://localhost:8081/api/users/1 \
   -H "Content-Type: application/json" \
   -d '{"nombre":"Ada L.","email":"ada@example.com","activo":false}'
 ```
@@ -238,7 +279,7 @@ curl -X PUT http://localhost:8080/api/users/1 \
 **Eliminar**
 
 ```bash
-curl -X DELETE http://localhost:8080/api/users/1
+curl -X DELETE http://localhost:8081/api/users/1
 ```
 
 ---

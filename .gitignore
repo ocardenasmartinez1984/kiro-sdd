@@ -4,9 +4,8 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-# Maven wrapper
+# Maven wrapper (maven-wrapper.properties SÍ se versiona para que ./mvnw funcione en CI)
 .mvn/timing.properties
-.mvn/wrapper/maven-wrapper.properties
 
 # Logs
 *.log

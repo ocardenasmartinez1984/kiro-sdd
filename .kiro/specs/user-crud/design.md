@@ -413,7 +413,7 @@ Propiedades del build: `java.version = 21`, parent `spring-boot-starter-parent` 
 
 ```yaml
 server:
-  port: 8080
+  port: 8081
 
 spring:
   datasource:
@@ -437,7 +437,7 @@ spring:
       enabled: true
 ```
 
-La consola H2 queda disponible en `http://localhost:8080/h2-console`.
+La consola H2 queda disponible en `http://localhost:8081/h2-console`.
 
 ### Virtual Threads (Java 21 / Project Loom)
 
@@ -496,7 +496,7 @@ La aplicación se empaqueta como una imagen Docker mediante una construcción **
 
 | Aspecto | Decisión |
 |---------|----------|
-| Puerto | Expone `8080` (`EXPOSE 8080`) |
+| Puerto | Expone `8081` (`EXPOSE 8081`) |
 | Usuario | Ejecuta como usuario no root (`appuser`) por seguridad |
 | Contexto de build | Un `.dockerignore` excluye `target/`, `.git`, `.kiro`, archivos de IDE |
 | Orquestación local | `docker-compose.yml` levanta el servicio con `docker compose up` |
@@ -506,7 +506,7 @@ La aplicación se empaqueta como una imagen Docker mediante una construcción **
 
 - `Dockerfile`: build multi-etapa.
 - `.dockerignore`: exclusiones del contexto.
-- `docker-compose.yml`: define el servicio `app` mapeando `8080:8080`.
+- `docker-compose.yml`: define el servicio `app` mapeando `8081:8081`.
 
 _Requisitos cubiertos: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7._
 
@@ -518,7 +518,7 @@ La aplicación se despliega en un clúster minikube local con manifests mínimos
 
 | Archivo | Recurso | Propósito |
 |---------|---------|-----------|
-| `k8s/deployment.yaml` | `Deployment` | Ejecuta 1 réplica del contenedor `user-crud`, puerto 8080, con probes y límites de recursos |
+| `k8s/deployment.yaml` | `Deployment` | Ejecuta 1 réplica del contenedor `user-crud`, puerto 8081, con probes y límites de recursos |
 | `k8s/service.yaml` | `Service` (`NodePort`) | Expone la aplicación dentro del clúster y para acceso local |
 
 ### Deployment
@@ -532,7 +532,7 @@ La aplicación se despliega en un clúster minikube local con manifests mínimos
 ### Service
 
 - Tipo `NodePort` para permitir el acceso desde la máquina host vía `minikube service user-crud --url`.
-- Mapea el puerto 80 del Service al 8080 del contenedor.
+- Mapea el puerto 80 del Service al 8081 del contenedor.
 
 ### Flujo de despliegue
 
@@ -544,6 +544,43 @@ minikube service user-crud --url # obtener la URL de acceso
 ```
 
 _Requisitos cubiertos: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6._
+
+## CI/CD (Jenkins)
+
+El ciclo de integración y despliegue se automatiza con un **pipeline declarativo de Jenkins** definido en un `Jenkinsfile` en la raíz del repositorio. El pipeline reutiliza los artefactos ya existentes (el `Dockerfile` multi-etapa y los manifests de `k8s/`), sin duplicar lógica de build ni de despliegue. Manteniendo KISS, es un pipeline lineal de etapas encadenadas, sin plugins ni infraestructura adicionales más allá de los que ya requiere el proyecto (Maven, Docker, kubectl y minikube disponibles en el agente).
+
+### Etapas del pipeline
+
+| Etapa | Acción | Comando de referencia |
+|-------|--------|-----------------------|
+| Compile | Compila el proyecto | `mvn -B clean compile` |
+| Unit tests | Ejecuta las pruebas unitarias y publica resultados | `mvn -B test` + `junit '**/target/surefire-reports/*.xml'` |
+| Dockerize | Construye la imagen usando el `Dockerfile` existente | `docker build -t user-crud:latest .` |
+| Deploy (minikube) | Aplica los manifests y verifica el rollout | `kubectl apply -f k8s/` + `kubectl rollout status deployment/user-crud` |
+
+### Consideraciones de diseño
+
+- **Fallo temprano**: si la etapa de pruebas unitarias falla, el pipeline se detiene y no construye la imagen ni despliega. Esto se logra encadenando las etapas de forma secuencial; una etapa fallida aborta el resto.
+- **Imagen disponible para minikube**: como la imagen se construye localmente (no se publica en un registro) y el `Deployment` usa `imagePullPolicy: IfNotPresent`, la etapa de dockerización debe construir contra el daemon Docker de minikube (`eval $(minikube docker-env)`) o cargar la imagen (`minikube image load user-crud:latest`) antes de desplegar. Se prefiere el daemon de minikube para evitar una copia extra.
+- **Verificación del despliegue**: tras `kubectl apply`, se usa `kubectl rollout status deployment/user-crud` para confirmar que el pod queda `Ready`, alineado con las probes de Actuator ya definidas (Requisito 11/12).
+- **Publicación de resultados de test**: se publican los informes de Surefire con el paso `junit` para dar visibilidad de las pruebas en la UI de Jenkins.
+- **Agente**: se asume un agente Jenkins con acceso a Maven, Docker y `kubectl` apuntando al contexto de minikube. No se introducen agentes ni contenedores de build adicionales para mantener la simplicidad.
+
+### Archivo
+
+- `Jenkinsfile`: pipeline declarativo con las etapas `Compile`, `Unit Tests`, `Dockerize` y `Deploy`.
+
+### Flujo del pipeline
+
+```mermaid
+graph LR
+    Compile[Compile<br/>mvn clean compile] --> Test[Unit Tests<br/>mvn test]
+    Test -->|éxito| Docker[Dockerize<br/>docker build]
+    Test -->|fallo| Fail[Pipeline fallido]
+    Docker --> Deploy[Deploy minikube<br/>kubectl apply + rollout status]
+```
+
+_Requisitos cubiertos: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8._
 
 ## Testing Strategy
 
